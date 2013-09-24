@@ -1,0 +1,20 @@
+print - skriver ut tekst/string
+# - lager kommentarer
++, -, /, * - operatorer
+><= - større enn/mindre enn/er lik
+= - tilordningsoperator
+boolean - true/false
+%s, %r, %d - tekstformatering
+"" - tekst/string
+% - modulo-operator
+\\	- backslash
+\n	- ny linje
+\t - tabulator
+raw_input() - input fra bruker
+import - importere biblioteker
+open() - åpne fil
+*.read() - lese fil
+write() - skrive til fil/slette
+close() - lukke og lagre fil
+def - definere en funksjon
+return - returnere en verdi
