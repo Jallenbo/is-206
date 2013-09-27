@@ -36,7 +36,7 @@ class Bokhandel(Scene):
 		secret_word = "rosa"
 		
 		guess = raw_input("Farge: ")
-		guesses = 0
+		guesses = 1
 		while guess != secret_word and guesses < 3:
 			print "Det var ikke rett farge. Prøv igjen."
 			guesses += 1
@@ -62,7 +62,7 @@ class Bank(Scene):
 		secret_number = "%d%d" % (randint(1,9), randint(0,9))
 		
 		guess = raw_input("Tall: ")
-		guesses = 0
+		guesses = 1
 		while guess != secret_number and guesses < 5:
 			print "Feil tall, min venn. Prøv igjen."
 			guesses += 1
