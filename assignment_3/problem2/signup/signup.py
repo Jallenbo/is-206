@@ -57,24 +57,32 @@ class MainPage(webapp2.RequestHandler):
 			self.response.out.write("Error in password, ")
 		elif password != verify:
 			error = True
-			self.response.out.write("The password didn't match, ")
+			self.response.out.write("The passwords didn't match, ")
 		
-		if not valid_email(email):
-			error = True
-			self.response.out.write("Error in mail ")
+		if email == "":
+			pass
+		else:
+			if not valid_email(email):
+				self.response.out.write("Error in mail ")
+				error = True
 			
 		if error:
 			self.response.out.write(form)
 		else:
-			self.redirect("/register")
+			uname = username
+			self.redirect("/register?uname=" + uname)
 			
 	def write_form(self):
 		self.response.out.write(form)
 			
 class Register(webapp2.RequestHandler):
 	def get(self):
-		self.response.out.write("Welcome")
-		
+		username = self.request.get("uname")
+		if valid_username(username):
+			self.response.out.write("Welcome, " + username + "!")
+		else:
+			self.redirect("/")
+			
 application = webapp2.WSGIApplication([('/', MainPage),
 									   ('/register', Register)],
 									   debug=True)
