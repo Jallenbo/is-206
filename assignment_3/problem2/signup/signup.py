@@ -1,6 +1,7 @@
 import webapp2
 import re
-		
+
+#The signup-form		
 form = """
 <form method ="post">
 <label> Username
@@ -24,6 +25,7 @@ form = """
 </form>
 """
 
+#Regular expressions to check for errors in form
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
 def valid_username(username):
 	return USER_RE.match(username)		
@@ -35,7 +37,8 @@ def valid_password(password):
 EMAIL_RE = re.compile(r"^[\S]+@[\S]+\.[\S]+$")
 def valid_email(email):
 	return EMAIL_RE.match(email)
-	
+
+#Get the content, validate it using RE, and either redirect or give error
 class MainPage(webapp2.RequestHandler):
 	def get(self):
 		self.write_form()
@@ -50,20 +53,20 @@ class MainPage(webapp2.RequestHandler):
 		
 		if not valid_username(username):
 			error = True
-			self.response.out.write("Error in username, ")
+			self.response.out.write("Error in username. <br/>")
 			
 		if not valid_password(password):
 			error = True
-			self.response.out.write("Error in password, ")
+			self.response.out.write("Error in password. <br />")
 		elif password != verify:
 			error = True
-			self.response.out.write("The passwords didn't match, ")
+			self.response.out.write("The passwords didn't match. <br />")
 		
 		if email == "":
 			pass
 		else:
 			if not valid_email(email):
-				self.response.out.write("Error in mail ")
+				self.response.out.write("Error in mail. \n <hr />")
 				error = True
 			
 		if error:
@@ -74,7 +77,8 @@ class MainPage(webapp2.RequestHandler):
 			
 	def write_form(self):
 		self.response.out.write(form)
-			
+		
+#Welcome page fetches username from GET-request and prints it
 class Register(webapp2.RequestHandler):
 	def get(self):
 		username = self.request.get("uname")

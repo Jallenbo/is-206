@@ -7,6 +7,7 @@ import jinja2
 
 from google.appengine.ext import db
 
+#Use Udacitys template
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
                                autoescape = True)
@@ -15,6 +16,7 @@ def render_str(template, **params):
     t = jinja_env.get_template(template)
     return t.render(params)
 
+#Handlers that inherits from RequestHandler to make things easier to write
 class BlogHandler(webapp2.RequestHandler):
     def write(self, *a, **kw):
         self.response.out.write(*a, **kw)
@@ -32,6 +34,7 @@ def render_post(response, post):
 def blog_key(name = 'default'):
     return db.Key.from_path('blogs', name)
 
+#Creates an entity to be put in Google Datastore, hence the inheritance from db.Model
 class Post(db.Model):
     subject = db.StringProperty(required = True)
     content = db.TextProperty(required = True)
@@ -42,11 +45,13 @@ class Post(db.Model):
         self._render_text = self.content.replace('\n', '<br>')
         return render_str("post.html", p = self)
 
+#Gets the 10 last posts from the database sorted by date
 class BlogFront(BlogHandler):
     def get(self):
         posts = db.GqlQuery("select * from Post order by created desc limit 10")
         self.render('front.html', posts = posts)
 
+#Renders a permalink to a specific post
 class PostPage(BlogHandler):
     def get(self, post_id):
         key = db.Key.from_path('Post', int(post_id), parent=blog_key())
@@ -58,6 +63,8 @@ class PostPage(BlogHandler):
 
         self.render("permalink.html", post = post)
 
+#Gets subject and content from GET-request
+#Creates a new Post-entity with values to be put in Datastore
 class NewPost(BlogHandler):
     def get(self):
         self.render("newpost.html")
@@ -74,6 +81,7 @@ class NewPost(BlogHandler):
             error = "Emne og innhold, takk!"
             self.render("newpost.html", subject=subject, content=content, error=error)
 
+#Gets username from GET-request, and prints it
 class Welcome(BlogHandler):
     def get(self):
         username = self.request.get('username')

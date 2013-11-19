@@ -3,6 +3,8 @@ import re
 import random
 import hashlib
 import hmac
+import logging
+import json
 from string import letters
 
 import webapp2
@@ -20,71 +22,74 @@ template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
                                autoescape = True)
 
-#"Secret" token so no one can modify cookie
-secret = 'hemmelig.ord'
+secret = 'topphemmelig'
 
 def render_str(template, **params):
     t = jinja_env.get_template(template)
     return t.render(params)
 
-#Use hmac to generate a hash with secret token
 def make_secure_val(val):
     return '%s|%s' % (val, hmac.new(secret, val).hexdigest())
 
-#Check if cookie hash match
 def check_secure_val(secure_val):
     val = secure_val.split('|')[0]
     if secure_val == make_secure_val(val):
         return val
-		
+
 class BlogHandler(webapp2.RequestHandler):
     def write(self, *a, **kw):
         self.response.out.write(*a, **kw)
 
     def render_str(self, template, **params):
         params['user'] = self.user
-        return render_str(template, **params)
+        t = jinja_env.get_template(template)
+        return t.render(params)
 
     def render(self, template, **kw):
         self.write(self.render_str(template, **kw))
-	
-	#Set cookie on logon
+
+    def render_json(self, d):
+        json_txt = json.dumps(d)
+        self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
+        self.write(json_txt)
+
     def set_secure_cookie(self, name, val):
         cookie_val = make_secure_val(val)
         self.response.headers.add_header(
             'Set-Cookie',
             '%s=%s; Path=/' % (name, cookie_val))
 
-	#Read cookie from browser
     def read_secure_cookie(self, name):
         cookie_val = self.request.cookies.get(name)
         return cookie_val and check_secure_val(cookie_val)
 
-	#Set cookie on logon
     def login(self, user):
         self.set_secure_cookie('user_id', str(user.key().id()))
 
-	#Delete cookie content to logout
     def logout(self):
         self.response.headers.add_header('Set-Cookie', 'user_id=; Path=/')
 
+#Checks if link ends with .html or .json
+#Sets format to HTML or JSON
     def initialize(self, *a, **kw):
         webapp2.RequestHandler.initialize(self, *a, **kw)
         uid = self.read_secure_cookie('user_id')
         self.user = uid and User.by_id(int(uid))
 
-#Some salt and pepper to spice things up (or make the hash more secure)
+        if self.request.url.endswith('.json'):
+            self.format = 'json'
+        else:
+            self.format = 'html'
+
 def make_salt(length = 5):
     return ''.join(random.choice(letters) for x in xrange(length))
 
-#Add the salt to the food
 def make_pw_hash(name, pw, salt = None):
     if not salt:
         salt = make_salt()
     h = hashlib.sha256(name + pw + salt).hexdigest()
     return '%s,%s' % (salt, h)
 
-#Check if password is valid
 def valid_pw(name, password, h):
     salt = h.split(',')[0]
     return h == make_pw_hash(name, password, salt)
@@ -120,7 +125,74 @@ class User(db.Model):
         if u and valid_pw(name, pw, u.pw_hash):
             return u
 
-#Regular expressions to check valid registrations			
+def blog_key(name = 'default'):
+    return db.Key.from_path('blogs', name)
+
+class Post(db.Model):
+    subject = db.StringProperty(required = True)
+    content = db.TextProperty(required = True)
+    created = db.DateTimeProperty(auto_now_add = True)
+    last_modified = db.DateTimeProperty(auto_now = True)
+
+    def render(self):
+        self._render_text = self.content.replace('\n', '<br>')
+        return render_str("post.html", p = self)
+
+#Makes JSON-code
+    def as_dict(self):
+        time_fmt = '%c'
+        d = {'subject': self.subject,
+             'content': self.content,
+             'created': self.created.strftime(time_fmt),
+             'last_modified': self.last_modified.strftime(time_fmt)}
+        return d
+
+#Renders JSON using as_dict if format is set to JSON in initialize()
+class BlogFront(BlogHandler):
+    def get(self):
+        posts = greetings = Post.all().order('-created')
+        if self.format == 'html':
+            self.render('front.html', posts = posts)
+        else:
+            return self.render_json([p.as_dict() for p in posts])
+
+#Same as BlogFront
+class PostPage(BlogHandler):
+    def get(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+
+        if not post:
+            self.error(404)
+            return
+        if self.format == 'html':
+            self.render("permalink.html", post = post)
+        else:
+            self.render_json(post.as_dict())
+
+class NewPost(BlogHandler):
+    def get(self):
+        if self.user:
+            self.render("newpost.html")
+        else:
+            self.redirect("/login")
+
+    def post(self):
+        if not self.user:
+            self.redirect('/blog')
+
+        subject = self.request.get('subject')
+        content = self.request.get('content')
+
+        if subject and content:
+            p = Post(parent = blog_key(), subject = subject, content = content)
+            p.put()
+            self.redirect('/%s' % str(p.key().id()))
+        else:
+            error = "subject and content, please!"
+            self.render("newpost.html", subject=subject, content=content, error=error)
+
+
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
 def valid_username(username):
     return username and USER_RE.match(username)
@@ -133,7 +205,6 @@ EMAIL_RE  = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
 def valid_email(email):
     return not email or EMAIL_RE.match(email)
 
-#Render sign up-form, make use of the regular expressions, give error if input is not valid
 class Signup(BlogHandler):
     def get(self):
         self.render("signup-form.html")
@@ -173,7 +244,6 @@ class Signup(BlogHandler):
 
 class Register(Signup):
     def done(self):
-        #Check if user already exist, add to datastore if new user
         u = User.by_name(self.username)
         if u:
             msg = 'That user already exists.'
@@ -183,9 +253,8 @@ class Register(Signup):
             u.put()
 
             self.login(u)
-            self.redirect('/welcome')
+            self.redirect('/')
 
-#Render login-form, make use of valid_pw, if valid redirect to welcome page
 class Login(BlogHandler):
     def get(self):
         self.render('login-form.html')
@@ -197,30 +266,22 @@ class Login(BlogHandler):
         u = User.login(username, password)
         if u:
             self.login(u)
-            self.redirect('/welcome')
+            self.redirect('/')
         else:
             msg = 'Invalid login'
             self.render('login-form.html', error = msg)
 
-#/logout initiates logout()-function in BlogHandler which delete contents of the cookie
 class Logout(BlogHandler):
     def get(self):
         self.logout()
         self.redirect('/signup')
 
-#The welcome-page logged in users get directed to		
-class Unit3Welcome(BlogHandler):
-    def get(self):
-        if self.user:
-            self.render('welcome.html', username = self.user.name)
-        else:
-            self.redirect('/signup')
-
-#Mapping links to classes 
-app = webapp2.WSGIApplication([('/', Register),
+app = webapp2.WSGIApplication([('/', BlogFront),
+                               ('/?(?:.json)?', BlogFront),
+                               ('/([0-9]+)(?:.json)?', PostPage),
+                               ('/newpost', NewPost),
                                ('/signup', Register),
                                ('/login', Login),
                                ('/logout', Logout),
-                               ('/welcome', Unit3Welcome),
                                ],
                               debug=True)
